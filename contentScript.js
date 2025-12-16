@@ -339,7 +339,11 @@ function stripMetadataPrefix(snippet) {
   }
   const parts = normalized.split(' ');
   let idx = 0;
-  while (idx < parts.length && /^[a-z0-9_.-]+$/i.test(parts[idx])) {
+  while (
+    idx < parts.length &&
+    /^[a-z0-9_.-]+$/i.test(parts[idx]) &&
+    /[_0-9]/.test(parts[idx])
+  ) {
     idx += 1;
   }
   if (idx < parts.length) {

@@ -210,6 +210,23 @@ body {
   font-size: 1.2rem;
 }
 
+.status-ai {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.status-ai-label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.status-ai-value {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .status-circle {
   width: 160px;
   height: 160px;
@@ -269,6 +286,12 @@ body {
   justify-content: space-between;
   align-items: baseline;
   font-size: 0.75rem;
+}
+
+.entry .sentence {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .entry .keywords {

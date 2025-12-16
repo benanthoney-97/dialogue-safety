@@ -1,10 +1,27 @@
 const STORAGE_KEY = 'dialogueSafetyKeywordLog';
+const AI_DECISION_KEY = 'dialogueSafetyLastAIDecision';
 let entriesRoot;
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function createKeywordsHTML(keywords) {
   return keywords
     .map((word) => `<span>${word}</span>`)
     .join('');
+}
+
+function renderSentence(entry) {
+  if (!entry?.sentence) {
+    return '';
+  }
+  return `<p class="sentence">${escapeHtml(entry.sentence)}</p>`;
 }
 
 function renderEntries(entries) {
@@ -25,6 +42,7 @@ function renderEntry(entry) {
       <article class="entry">
         ${meta}
         <div class="keywords">${createKeywordsHTML(entry.keywords)}</div>
+        ${renderSentence(entry)}
         ${renderClassification(entry)}
       </article>
     `;
@@ -49,6 +67,25 @@ function renderClassification(entry) {
       <span class="classification-score">${confidence.toFixed(1)}%</span>
     </div>
   `;
+}
+
+function formatAIDecision(decision) {
+  if (!decision) {
+    return 'AI verdict pending.';
+  }
+  const statusLabel = decision.safe ? 'Safe' : 'At risk';
+  const confidencePart = typeof decision.confidence === 'number'
+    ? ` (${(decision.confidence * 100).toFixed(0)}% confident)`
+    : '';
+  const reasonPart = decision.reason ? ` — ${decision.reason}` : '';
+  return `${statusLabel}${confidencePart}${reasonPart}`;
+}
+
+function updateAIDecisionDisplay(decision) {
+  if (!aiVerdictEl) {
+    return;
+  }
+  aiVerdictEl.textContent = formatAIDecision(decision);
 }
 
 function renderMeta(entry) {
@@ -85,6 +122,7 @@ const keywordsChips = document.querySelector('[data-keywords-chips]');
 const KEYWORDS_STORAGE = 'dialogueSafetyParentKeywords';
 const STATUS_ACTIVITY_KEY = 'dialogueSafetyLastActivity';
 const statusTimeEl = document.querySelector('[data-status-time]');
+const aiVerdictEl = document.querySelector('[data-ai-verdict]');
 
 function loadKeywords() {
   const raw = localStorage.getItem(KEYWORDS_STORAGE);
@@ -175,6 +213,15 @@ function loadLastActivity() {
   });
 }
 
+function loadLastAIDecision() {
+  if (!chrome?.storage?.local) {
+    return;
+  }
+  chrome.storage.local.get([AI_DECISION_KEY], (snapshot) => {
+    updateAIDecisionDisplay(snapshot[AI_DECISION_KEY]);
+  });
+}
+
 function setActiveView(view) {
   navButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.view === view);
@@ -236,6 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   loadLastActivity();
+  loadLastAIDecision();
 });
 
 chrome.storage.onChanged.addListener((changes) => {
@@ -244,5 +292,8 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes[STATUS_ACTIVITY_KEY]) {
     updateStatusActivityDisplay(changes[STATUS_ACTIVITY_KEY].newValue);
+  }
+  if (changes[AI_DECISION_KEY]) {
+    updateAIDecisionDisplay(changes[AI_DECISION_KEY].newValue);
   }
 });

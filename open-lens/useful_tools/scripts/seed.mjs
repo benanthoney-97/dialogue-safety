@@ -16,6 +16,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 // --- DATA TO INJECT ---
 const KNOWLEDGE_BASE = [
+  // 1. Orion Legal (unchanged)
   {
     providerName: "Orion Legal",
     docs: [
@@ -33,6 +34,7 @@ const KNOWLEDGE_BASE = [
       }
     ]
   },
+  // 2. GreenField Research (unchanged)
   {
     providerName: "GreenField Research",
     docs: [
@@ -47,6 +49,34 @@ const KNOWLEDGE_BASE = [
       {
         title: "Market Signal: Founder-Led Sales",
         content: "In Seed to Series A stages, we look for Founder-Led sales. If a startup has hired a VP of Sales too early (before $1M ARR), it often indicates a lack of product-market fit."
+      }
+    ]
+  },
+  // 3. TMC (The Midnight Club) - NEW! 🚀
+  {
+    providerName: "TMC", 
+    docs: [
+      {
+        title: "STRATEGY UPDATE: Q3 Trend Monitor - 'Low Profile' Market Saturation",
+        content: `
+# TMC STRATEGY UNIT - WEEKLY BRIEF
+**CLIENT:** Adidas Originals (Global)
+**TOPIC:** Competitive Response to "Slim Silhouette" Saturation
+
+## 1. MARKET OBSERVATION
+The "Low Profile/Terrace" trend (which we own via Samba/Gazelle) is becoming highly saturated.
+* **New Entries:** Puma "H-Street" and various "Speedcat" iterations are gaining media traction (e.g., Kith partnership).
+* **Risk:** The market is flooding with "racing" aesthetics, risking trend fatigue for our core icons.
+
+## 2. STRATEGIC STANCE
+We do not need to fight for a trend we already won.
+* **TMC Recommendation:** Maintain confidence in Samba, but do not aggressively chase the "racing" micro-trend. It is likely short-lived.
+* **Pivot Opportunity:** Use this saturation to our advantage by beginning to seed the **"Chunk/Skate"** aesthetic (Campus 00s, Superstar) earlier than planned. Offer the consumer an alternative silhouette to the "slim" look everyone else is copying.
+
+## 3. PARTNERSHIP NOTE (KITH)
+Kith's focus on the Puma H-Street release indicates they are diversifying their "retro" offering.
+* **Action:** Monitor Kith's social engagement on this drop. If engagement is high, we may need to refresh the creative on our next Samba drop to emphasize "Originality" rather than just "Style," reminding the consumer who started this wave.
+        `
       }
     ]
   }
@@ -77,7 +107,7 @@ async function seed() {
       continue
     }
 
-    // 2. Clear old knowledge (Optional: keeps it clean for testing)
+    // 2. Clear old knowledge (Keeps DB clean)
     await supabase.from('provider_knowledge').delete().eq('provider_id', provider.id)
 
     // 3. Vectorize and Insert

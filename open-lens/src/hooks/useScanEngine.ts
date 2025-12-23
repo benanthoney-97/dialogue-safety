@@ -83,7 +83,7 @@ export function useScanEngine() {
     if (scanType === 'chat' && !force) {
         setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: `**${activeProvider.name}** is thinking...` }])
     } else {
-        setMessages([{ role: "assistant", content: `**${activeProvider.name}** is analyzing...` }])
+        setMessages([{ role: "assistant", content: `**${activeProvider.name}** is analysing...` }])
     }
 
     // --- 🕵️‍♂️ DEBUG LOG (Check your browser console!) ---

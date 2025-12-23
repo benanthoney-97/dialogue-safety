@@ -1,14 +1,28 @@
-require('dotenv').config({ path: '../.env' });
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
+const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
 const { OpenAI } = require('openai');
 
+if (!process.env.PLASMO_PUBLIC_SUPABASE_URL) {
+    console.error("❌ ERROR: .env file not loaded correctly.");
+    process.exit(1);
+}
+
 // --- CONFIGURATION ---
-const PROVIDER_ID = 5; // The Careers Edit
-const INPUT_DIR = './transcripts';
+const PROVIDER_ID = 12; 
+const INPUT_DIR = './transcripts'; 
 const MIN_CHUNK_LENGTH = 800;
 const MAX_CHUNK_LENGTH = 2000;
+
+// 🗺️ URL MAPPING
+// Map filenames to their source URLs so citations are clickable.
+// If a file isn't listed here, it will just default to an empty link.
+const URL_MAP = {
+  // Example:
+  // "Inside Oddbox The CMO Who Helped a Purpose-Driven Brand Become a Growth Machine - Ep 68.mp3.json": "https://youtu.be/..."
+};
 
 // Initialize Clients
 const supabase = createClient(
@@ -64,22 +78,28 @@ function chunkTranscript(segments) {
 async function processFile(filename) {
   console.log(`\n📄 Processing: ${filename}`);
   const filePath = path.join(INPUT_DIR, filename);
+  
+  if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found at: ${filePath}`);
+      return;
+  }
+
   const rawData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   const cleanTitle = filename.replace('.mp3.json', '').replace('.json', '');
+
+  // Look up URL in the map, otherwise default to empty string
+  const sourceUrl = URL_MAP[filename] || "";
 
   // --- STEP 1: CREATE PARENT DOCUMENT ---
   console.log(`   📚 Creating Document Entry: "${cleanTitle}"...`);
   
-  // Optional: Add URL mapping logic here if you want specific YouTube URLs
-  const sourceUrl = ""; 
-
   const { data: docData, error: docError } = await supabase
     .from('provider_documents')
     .insert({
       provider_id: PROVIDER_ID,
       title: cleanTitle,
-      media_type: 'video',
-      source_url: sourceUrl
+      media_type: 'video', // Assumed video/podcast
+      source_url: sourceUrl 
     })
     .select()
     .single();
@@ -99,11 +119,11 @@ async function processFile(filename) {
     const embedding = await generateEmbedding(chunk.content);
 
     const { error } = await supabase.from('provider_knowledge').insert({
-      document_id: documentId, // Link to parent
-      provider_id: PROVIDER_ID, // (Optional redundancy, but good for RLS)
+      document_id: documentId, 
+      provider_id: PROVIDER_ID, 
       content: chunk.content,
       embedding: embedding,
-      metadata: chunk.metadata // Contains timestamps
+      metadata: chunk.metadata 
     });
 
     if (error) console.error(`   ❌ Chunk Error:`, error);
@@ -112,9 +132,21 @@ async function processFile(filename) {
 }
 
 (async () => {
-  const files = fs.readdirSync(INPUT_DIR).filter(f => f.endsWith('.json'));
-  for (const file of files) {
-    await processFile(file);
+  console.log(`📂 Scanning directory: ${INPUT_DIR}`);
+  
+  // Find all JSON files in the directory
+  const files = fs.readdirSync(INPUT_DIR).filter(file => file.endsWith('.json'));
+
+  if (files.length === 0) {
+      console.log("⚠️ No .json transcript files found.");
+      return;
   }
-  console.log("\n🎉 All transcripts seeded successfully!");
+
+  console.log(`🔎 Found ${files.length} files to seed.`);
+
+  for (const file of files) {
+      await processFile(file);
+  }
+  
+  console.log("\n🎉 Seeding complete!");
 })();

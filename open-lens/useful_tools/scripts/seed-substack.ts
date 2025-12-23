@@ -20,9 +20,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const parser = new Parser()
 
 // --- CONFIGURATION ---
-const RSS_URL = "https://theraffireport.substack.com/feed"
-const PROVIDER_ID = 7 // "The Raffi Report"
-const PROVIDER_NAME = "The Raffi Report"
+const RSS_URL = "https://newsletter.mkt1.co/t/the-mkt1-field-guide"
+const PROVIDER_ID = 13 // "The Raffi Report"
+const PROVIDER_NAME = "MKT1"
 
 async function seed() {
   console.log(`\n🔎 STARTING FEED INGESTION...`)

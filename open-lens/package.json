@@ -1,8 +1,8 @@
 {
   "name": "open-lens",
-  "displayName": "OpenLens",
+  "displayName": "Dialogue",
   "version": "0.0.1",
-  "description": "The contextual intelligence layer for the open web.",
+  "description": "The contextual intelligence layer for your browser.",
   "author": "OpenLens",
   "scripts": {
     "dev": "plasmo dev",
@@ -18,6 +18,7 @@
     "express": "^5.2.1",
     "lucide-react": "^0.561.0",
     "markdown-to-jsx": "^9.4.2",
+    "motion": "^12.23.26",
     "openai": "^6.15.0",
     "plasmo": "0.90.5",
     "react": "18.2.0",
@@ -53,6 +54,7 @@
       "activeTab"
     ],
     "action": {
-      "default_title": "OpenLens"
+      "default_title": "Dialogue"
     }
-  }}
+  }
+}

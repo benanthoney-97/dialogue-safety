@@ -2,46 +2,70 @@ import React, { memo } from "react"
 import Markdown from "markdown-to-jsx"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { PlayCircle, FileText, ExternalLink } from "lucide-react"
-import type { SourceDocument } from "./sourceReferenceCard" 
+import { PlayCircle, FileText, ExternalLink, ArrowUpRight } from "lucide-react"
+import type { SourceDocument } from "../ui/sourceReferenceCard" 
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+// --- HELPER: Decode HTML Entities ---
+function decodeHtmlEntities(text: string): string {
+  if (!text) return "";
+  const doc = new DOMParser().parseFromString(text, "text/html");
+  return doc.documentElement.textContent || "";
 }
 
 // --- HELPER: Generate Text Fragment URL ---
 function generateTextFragmentUrl(baseUrl: string, chunkContent?: string): string {
   if (!chunkContent || !baseUrl) return baseUrl || '#'
 
-  // 1. Flatten whitespace to single spaces
-  const cleanContent = chunkContent.replace(/\s+/g, ' ').trim()
-  
-  // 2. Split into words
-  const words = cleanContent.split(' ')
-  
-  // If too short, just return the base URL
-  if (words.length < 4) {
-    console.warn("[TextFragment] Text too short for fragment:", cleanContent)
+  try {
+    // 1. Decode entities
+    let cleanContent = decodeHtmlEntities(chunkContent)
+
+    // 2. Flatten
+    cleanContent = cleanContent.replace(/\s+/g, ' ').trim()
+    
+    // 3. Split
+    const words = cleanContent.split(' ')
+    
+    if (words.length < 4) {
+      return baseUrl
+    }
+
+    // 4. Fragment (First 6 words)
+    const snippet = words.slice(0, 6).join(' ')
+    const fragment = `#:~:text=${encodeURIComponent(snippet)}`
+
+    return `${baseUrl}${fragment}`
+  } catch (e) {
     return baseUrl
   }
-
-  // 3. Take first 6-8 words for a robust match
-  // We strip punctuation from the start/end of the match string to avoid browser matching issues
-  let snippet = words.slice(0, 7).join(' ')
-  
-  // Encode carefully for URL
-  const fragment = `#:~:text=${encodeURIComponent(snippet)}`
-
-  return `${baseUrl}${fragment}`
 }
 
 // --- 1. THE BADGE COMPONENT ---
 const CitationBadge = ({ title, timestamp, sources }: { title: string, timestamp?: string, sources: SourceDocument[] }) => {
   
-  // Find source by partial title match
-  const source = sources?.find(s => s.title.includes(title) || title.includes(s.title))
-  const isVideo = source?.media_type === 'video' || timestamp
+  // Find source
+  const source = sources?.find(s => 
+    s.title.toLowerCase().includes(title.toLowerCase()) || 
+    title.toLowerCase().includes(s.title.toLowerCase())
+  )
+
+  // 🔍 FIX: Strict Type Logic
+  // It is only a video if:
+  // 1. Explicitly marked 'video'
+  // 2. OR URL is YouTube AND it's NOT explicitly an 'article' (fallback)
+  const isExplicitArticle = source?.media_type === 'article' || source?.media_type === 'pdf';
+  const isExplicitVideo = source?.media_type === 'video';
+  const isYoutube = source?.source_url && (source.source_url.includes('youtube') || source.source_url.includes('youtu.be'));
   
+  const isVideo = isExplicitVideo || (isYoutube && !isExplicitArticle);
+
+  // 🔍 FIX: Only show timestamp text if it's actually a video
+  const showTimestamp = isVideo && timestamp;
+
   // Helper for Video Timestamps
   const getSeconds = (timeStr: string) => {
     if (!timeStr) return 0
@@ -51,44 +75,67 @@ const CitationBadge = ({ title, timestamp, sources }: { title: string, timestamp
     return 0
   }
 
+// ... inside CitationBadge component ...
+
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    e.preventDefault() // Prevent any default anchor behavior
+    e.preventDefault() 
 
-    // --- DEBUGGING (Check Browser Console) ---
-    console.group("🖱️ Citation Clicked")
-    console.log("Title:", title)
-    console.log("Source Object:", source)
-    
-    if (!source?.source_url) {
-      console.error("❌ No Source URL found")
-      console.groupEnd()
-      return
-    }
+    if (!source?.source_url) return
 
     let finalUrl = source.source_url.trim()
     
-    // A. VIDEO LOGIC
+    // --- PATH A: VIDEO / AUDIO TIMESTAMP LOGIC ---
     if (isVideo && timestamp) {
        const seconds = getSeconds(timestamp)
-       if (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be')) {
-          const hasParams = finalUrl.includes('?')
-          finalUrl = `${finalUrl}${hasParams ? '&' : '?'}t=${seconds}`
-       } else if (finalUrl.includes('vimeo.com')) {
-          finalUrl = `${finalUrl}#t=${seconds}s`
+       try {
+         const urlObj = new URL(finalUrl)
+         const hostname = urlObj.hostname.toLowerCase()
+
+         // 1. YOUTUBE (Standard & Short Links)
+         if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+            urlObj.searchParams.set('t', seconds.toString())
+            finalUrl = urlObj.toString()
+         } 
+         // 2. SPOTIFY (New Support)
+         else if (hostname.includes('spotify.com')) {
+            // Spotify uses '?t=' in seconds (e.g. ?t=120)
+            urlObj.searchParams.set('t', seconds.toString())
+            finalUrl = urlObj.toString()
+         }
+         // 3. VIMEO
+         else if (hostname.includes('vimeo.com')) {
+            finalUrl = `${finalUrl}#t=${seconds}s`
+         }
+         // 4. GENERIC FALLBACK (Apple Podcasts etc.)
+         else {
+            // Apple doesn't support parameters. 
+            // UX Feature: Copy timestamp to clipboard so user can paste/remember it?
+            // For now, we just open the link. The user sees the timestamp in the badge.
+         }
+       } catch (e) {
+         // Fallback logic if URL parsing fails
+         if (finalUrl.includes('spotify.com')) {
+             finalUrl = `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}t=${seconds}`
+         } else {
+             finalUrl = `${finalUrl}#t=${seconds}`
+         }
        }
     } 
-    // B. ARTICLE LOGIC (Text Fragment)
+    // --- PATH B: ARTICLE (Text Highlight) ---
     else {
-      // Access content safely
-      const content = (source as any).content
-      console.log("Content for Fragment:", content ? content.substring(0, 30) + "..." : "MISSING")
-      
-      finalUrl = generateTextFragmentUrl(finalUrl, content)
+      const content = (source as any).content || source.content
+      if (content) {
+        finalUrl = generateTextFragmentUrl(finalUrl, content)
+      }
     }
     
-    console.log("🚀 Opening URL:", finalUrl)
-    console.groupEnd()
+    // Optional: Copy timestamp to clipboard for poor-support platforms
+    if (timestamp && finalUrl.includes('apple.com')) {
+        navigator.clipboard.writeText(timestamp).then(() => {
+            console.log("Timestamp copied to clipboard for manual scrubbing")
+        })
+    }
     
     window.open(finalUrl, "_blank")
   }
@@ -105,7 +152,7 @@ const CitationBadge = ({ title, timestamp, sources }: { title: string, timestamp
         )}
         title={source?.source_url ? `Open "${title}"` : `Source: ${title}`}
       >
-        {/* ICON / AVATAR */}
+        {/* ICON */}
         {source?.cover_image_url ? (
           <img 
             src={source.cover_image_url} 
@@ -129,8 +176,8 @@ const CitationBadge = ({ title, timestamp, sources }: { title: string, timestamp
           {title}
         </span>
         
-        {/* TIMESTAMP or ARROW */}
-        {timestamp ? (
+        {/* TIMESTAMP (Video Only) OR ARROW (Article) */}
+        {showTimestamp ? (
           <>
             <span className="opacity-20 leading-none mt-[1px]">|</span>
             <span className="font-bold font-mono text-[9px] text-blue-600 leading-none mt-[1px]">
@@ -138,7 +185,7 @@ const CitationBadge = ({ title, timestamp, sources }: { title: string, timestamp
             </span>
           </>
         ) : (
-             source?.source_url && <ExternalLink size={8} className="opacity-40 group-hover:opacity-100 transition-opacity ml-0.5" />
+             source?.source_url && <ArrowUpRight size={10} className="opacity-40 group-hover:opacity-100 transition-opacity ml-0.5 text-slate-500" />
         )}
       </span>
     </span>
@@ -155,7 +202,6 @@ export const Response = memo(({ className, children, sources, ...props }: Respon
   let content: string = typeof children === "string" ? children : (children ? String(children) : "")
   content = content.replace(/^[\t ]+([*-])/gm, '$1')
 
-  // Regex handles both time-stamped videos AND articles
   content = content.replace(
       /\[\[(.*?)(?:,\s*(?:Timestamp:)?\s*(\d{1,2}:\d{2}))?\]\]/g, 
       (match, title, time) => {

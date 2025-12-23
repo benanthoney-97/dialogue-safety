@@ -1,7 +1,8 @@
-import { AlertTriangle, FileSearch, FileText } from "lucide-react"
+import { AlertTriangle, FileSearch } from "lucide-react"
 import { Conversation, ConversationContent, ConversationScrollButton } from "./conversation"
 import { Response } from "./response"
-import { SourceReferenceCard, type SourceDocument } from "./sourceReferenceCard" // Re-add this import
+import { SourceReferenceCard, type SourceDocument } from "../ui/sourceReferenceCard"
+import { ShimmeringText } from "../ui/shimmering-text"
 
 interface ChatInterfaceProps {
   messages: Array<{ 
@@ -31,6 +32,12 @@ export function ChatInterface({
     })
   }
 
+  // Helper to detect if a message is a "Thinking" placeholder
+  const isThinkingState = (content: string) => {
+    const lower = content.toLowerCase()
+    return lower.includes("thinking...") || lower.includes("analyzing...") || lower.includes("generating...")
+  }
+
   return (
     <div className="h-full w-full relative bg-slate-50">
       
@@ -38,9 +45,10 @@ export function ChatInterface({
         <ConversationContent className="p-4">
             
             {messages.map((m, i) => (
+                
               <div key={i} className={`mb-4 flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div 
-                  className={`text-sm max-w-[95%] ${ // Increased max-width slightly for better carousel fit
+                  className={`text-sm max-w-[95%] ${ 
                     m.role === 'user' 
                     ? 'bg-slate-800 text-white p-3 rounded-xl shadow-sm' 
                     : 'text-slate-800 pl-1 py-1 w-full' 
@@ -49,29 +57,48 @@ export function ChatInterface({
                   {m.role === 'assistant' ? (
                     <div className="prose prose-sm prose-slate max-w-none dark:prose-invert leading-relaxed">
                         
-                        <Response sources={m.sources}>
-                          {m.content}
-                        </Response>
+                        {/* CONDITIONAL RENDERING: Thinking vs. Result */}
+                        {isThinkingState(m.content) ? (
+                            
+                            /* ✨ SHIMMERING TEXT STATE ✨ */
+                            <div className="flex items-center gap-2 py-1">
+                                <ShimmeringText 
+                                    text={m.content.replace(/\*\*/g, "")} // Strip markdown bolding for cleaner shimmer
+                                    className="text-sm font-medium text-slate-500" 
+                                    duration={2}
+                                />
+                            </div>
 
-{/* --- HORIZONTAL SOURCES CAROUSEL --- */}
-{m.sources && m.sources.length > 0 && (
-  <div className="mt-4 border-t border-slate-100 pt-3 max-w-full">
-    <div className="flex items-center justify-between mb-2 px-1">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-        Sources ({getUniqueSources(m.sources).length})
-      </p>
-    </div>
-    
-    {/* Horizontal Scroll Container */}
-    <div className="flex gap-2 overflow-x-auto pb-2 w-full flex-nowrap scrollbar-hide snap-x mask-linear-fade">
-      {getUniqueSources(m.sources).map((source) => (
-        <SourceReferenceCard key={source.id} document={source} />
-      ))}
-    </div>
-  </div>
-)}
+                        ) : (
+                            
+                            /* NORMAL CONTENT STATE */
+                            <>
+                                <Response sources={m.sources}>
+                                  {m.content}
+                                </Response>
+
+                                {/* --- HORIZONTAL SOURCES CAROUSEL --- */}
+                                {m.sources && m.sources.length > 0 && (
+                                  <div className="mt-4 border-t border-slate-100 pt-3 max-w-full">
+                                    <div className="flex items-center justify-between mb-2 px-1">
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Sources ({getUniqueSources(m.sources).length})
+                                      </p>
+                                    </div>
+                                    
+                                    {/* Horizontal Scroll Container */}
+                                    <div className="flex gap-2 overflow-x-auto pb-2 w-full flex-nowrap scrollbar-hide snap-x mask-linear-fade">
+                                      {getUniqueSources(m.sources).map((source) => (
+                                        <SourceReferenceCard key={source.id} document={source} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                            </>
+                        )}
                     </div>
                   ) : (
+                    /* USER MESSAGE */
                     <span className="whitespace-pre-wrap">{m.content}</span>
                   )}
                 </div>

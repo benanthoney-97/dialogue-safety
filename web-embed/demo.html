@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeedLegals - Smart Embed Demo</title>
+    <style>
+        /* 1. Basic Styling to mimic a clean blog post */
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background: #f9f9f9; margin: 0; padding: 0; }
+        .container { max-width: 700px; margin: 40px auto; background: white; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-radius: 8px; }
+        h1 { font-size: 2.5em; margin-bottom: 10px; color: #111; }
+        p { margin-bottom: 20px; font-size: 1.1em; }
+        
+        /* 2. THE EMBED STYLES (SeedLegals Branding) */
+        .sl-smart-link {
+            border-bottom: 2px solid #00bfa5; /* SeedLegals Teal */
+            background-color: rgba(0, 191, 165, 0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .sl-smart-link:hover {
+            background-color: rgba(0, 191, 165, 0.3);
+        }
+        .sl-smart-link::after {
+            content: " ▶";
+            font-size: 0.8em;
+            color: #00bfa5;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="blog-content">
+    <h1>The Founder's Guide to SEIS</h1>
+    <p>
+SEIS is designed to help small, early-stage companies raise money. 
+It offers tax relief to individual investors who purchase new shares in those companies.
+You can raise up to £150,000 under SEIS.
+Advanced Assurance is a guarantee from HMRC that your company is eligible.
+Investors often want to see this before they commit funds.
+The scheme is very generous but there are strict rules on how you spend the money.
+    </p>
+</div>
+<script>
+    // 👇 CORRECTED: Single set of brackets only
+    const MATCH_MAP = [
+        {
+            "phrase": "SEIS is designed to help small, early-stage companies raise money.",
+            "video_url": "https://vimeo.com/1134609741#t=1567",
+            "confidence": 0.580357365044122
+        },
+        {
+            "phrase": "It offers tax relief to individual investors who purchase new shares in those companies.",
+            "video_url": "https://vimeo.com/1138149812#t=1206",
+            "confidence": 0.538164675235748
+        },
+        {
+            "phrase": "You can raise up to \u00a3150,000 under SEIS.",
+            "video_url": "https://vimeo.com/1138787332#t=280",
+            "confidence": 0.662270605564117
+        },
+        {
+            "phrase": "Advanced Assurance is a guarantee from HMRC that your company is eligible.",
+            "video_url": "https://vimeo.com/1134609741#t=2211",
+            "confidence": 0.55025285482407
+        },
+        {
+            "phrase": "Investors often want to see this before they commit funds.",
+            "video_url": "https://vimeo.com/1134609741#t=264",
+            "confidence": 0.544493675231937
+        }
+    ];
+
+    document.addEventListener("DOMContentLoaded", function() {
+        if(MATCH_MAP.length === 0) {
+            console.log("⚠️ No matches found. Did you paste the JSON into MATCH_MAP?");
+            return;
+        }
+
+        const contentArea = document.getElementById('blog-content'); 
+
+        MATCH_MAP.forEach(match => {
+            // Escape special characters to prevent Regex errors
+            if (!match.phrase) return; // Safety check
+            
+            const cleanPhrase = match.phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(cleanPhrase, 'i'); // Case insensitive
+
+            // TreeWalker to find text nodes safely
+            const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            
+            // Collect nodes first to avoid messing up the walker while modifying
+            let textNodes = [];
+            while(node = walker.nextNode()) textNodes.push(node);
+
+            for (let node of textNodes) {
+                // Skip text inside existing links or buttons
+                if (node.parentElement.tagName.match(/A|BUTTON|SCRIPT|STYLE/)) continue;
+                
+                // If we find the phrase
+                if (node.nodeValue.includes(match.phrase)) {
+                    const fragment = document.createDocumentFragment();
+                    const parts = node.nodeValue.split(match.phrase);
+                    
+                    // Part 1: Text before
+                    fragment.appendChild(document.createTextNode(parts[0]));
+                    
+                    // Part 2: The Highlighted Link
+                    const span = document.createElement('span');
+                    span.textContent = match.phrase;
+                    span.className = "sl-smart-link";
+                    span.title = "Click to watch Anthony explain this";
+                    span.onclick = (e) => {
+                        e.preventDefault();
+                        window.open(match.video_url, '_blank');
+                    };
+                    fragment.appendChild(span);
+                    
+                    // Part 3: Text after
+                    fragment.appendChild(document.createTextNode(parts[1]));
+                    
+                    node.parentNode.replaceChild(fragment, node);
+                    
+                    // Stop looking for this specific phrase (prevents double highlighting)
+                    break; 
+                }
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

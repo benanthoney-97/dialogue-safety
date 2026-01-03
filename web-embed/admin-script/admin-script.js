@@ -12,7 +12,8 @@
     observer: null,
     highlightTimer: null,
     initialized: false,
-    mode: MODE_VISITOR
+    mode: MODE_VISITOR,
+    visitorListenerAttached: false
   };
 
   const getMatchIdentifier = (match) =>
@@ -69,6 +70,47 @@
       }
       body.sl-visitor-mode .sl-smart-link.sl-smart-link--inactive {
         display: none;
+      }
+      #sl-visitor-player {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 320px;
+        max-width: 90vw;
+        background: rgba(15, 23, 42, 0.9);
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.4);
+        color: #fff;
+        overflow: hidden;
+        z-index: 2147483647;
+        transform: translateY(20px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.28s ease, transform 0.28s ease;
+      }
+      #sl-visitor-player.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      #sl-visitor-player .sl-visitor-player__header {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.85);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-weight: 600;
+      }
+      #sl-visitor-player .sl-visitor-player__frame {
+        width: 100%;
+        height: 180px;
+        background: #000;
+        border-radius: 0 0 16px 16px;
+        overflow: hidden;
+      }
+      #sl-visitor-player iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
       }
     `;
     document.head.appendChild(style);
@@ -170,6 +212,91 @@
     });
   };
 
+  let playerState = null;
+  const toVimeoPlayerUrl = (value) => {
+    if (typeof value !== "string") return value || "";
+
+    const matches = [
+      /vimeo\.com\/(\d+)/,
+      /player\.vimeo\.com\/video\/(\d+)/
+    ];
+    let videoId = null;
+
+    for (const pattern of matches) {
+      const found = value.match(pattern);
+      if (found) {
+        videoId = found[1];
+        break;
+      }
+    }
+
+    if (!videoId) return value;
+
+    const timestampMatch = value.match(/#t=(\d+)/);
+    const suffix = timestampMatch ? `#t=${timestampMatch[1]}s` : "";
+    return `https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0${suffix}`;
+  };
+
+  const ensureVisitorPlayer = () => {
+    if (playerState) return playerState;
+    const container = document.createElement("div");
+    container.id = "sl-visitor-player";
+    container.innerHTML = `
+      <div class="sl-visitor-player__header">We picked this video for you...</div>
+      <div class="sl-visitor-player__frame">
+        <iframe allow="autoplay; fullscreen"></iframe>
+      </div>
+    `;
+    document.body.appendChild(container);
+    const iframe = container.querySelector("iframe");
+    playerState = { container, iframe };
+    return playerState;
+  };
+
+  const showVisitorPlayer = (match) => {
+    if (!match) return;
+    const player = ensureVisitorPlayer();
+    const iframe = player.iframe;
+    if (iframe) {
+      iframe.src = toVimeoPlayerUrl(match.video_url);
+    }
+    player.container.classList.add("visible");
+  };
+
+  const hideVisitorPlayer = () => {
+    if (!playerState) return;
+    if (playerState.iframe) {
+      playerState.iframe.src = "";
+    }
+    playerState.container.classList.remove("visible");
+  };
+
+    const handleVisitorClick = (event) => {
+      if (state.mode !== MODE_VISITOR) return;
+      const target = (event.target || event.srcElement);
+      if (!(target instanceof Element)) return;
+      const matchEl = target.closest(".sl-smart-link");
+      if (!matchEl) return;
+      const idxAttr = matchEl.getAttribute("data-match-index");
+      if (!idxAttr) return;
+      const index = Number(idxAttr);
+      if (Number.isNaN(index)) return;
+      const match = state.matches[index];
+      if (!match || match.status === "inactive") return;
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+      showVisitorPlayer(match);
+    };
+
+  const setupVisitorClicks = () => {
+    if (state.visitorListenerAttached) return;
+    state.visitorListenerAttached = true;
+    document.addEventListener("click", handleVisitorClick);
+  };
+
   const fetchMatchMap = async ({ providerId, apiOrigin, endpoint, limit }) => {
     const origin = (apiOrigin || DEFAULT_API_ORIGIN).replace(/\/$/, "");
     const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -190,6 +317,8 @@
       ensureHighlightStyle();
       highlightMatches(state.matches);
       setupObserver();
+      ensureVisitorPlayer();
+      setupVisitorClicks();
     });
   };
 

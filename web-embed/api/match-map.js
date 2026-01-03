@@ -49,7 +49,17 @@ const fetchMatches = async (providerId, limit = 50) => {
 
   const matches = [];
   for (const row of data || []) {
-    const embedUrl = vimeoEmbedUrl(row.video_url, 0);
+    let timestampValue = 0;
+    if (typeof row.video_url === "string") {
+      const timestampMatch = row.video_url.match(/#t=(\d+)/);
+      if (timestampMatch) {
+        const parsed = Number(timestampMatch[1]);
+        if (!Number.isNaN(parsed)) {
+          timestampValue = parsed;
+        }
+      }
+    }
+    const embedUrl = vimeoEmbedUrl(row.video_url, timestampValue);
 
     const match = {
       page_match_id: row.id,

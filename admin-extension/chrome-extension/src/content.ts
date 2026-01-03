@@ -54,11 +54,20 @@ const sendMatchClick = (matchIndex: number) => {
     console.warn("[content] no match found at index", matchIndex)
     return
   }
+
+  const targetIsVisitor = document.documentElement?.classList.contains("sl-visitor-mode") ||
+    document.body?.classList.contains("sl-visitor-mode")
+  if (targetIsVisitor) {
+    console.log("[content] page is in visitor mode, not sending matchClicked")
+    return
+  }
+
   const payload: MatchPayload = {
     ...match,
     page_match_id: match.page_match_id ?? match.id ?? null
   }
   console.log("[content] dispatching match click payload", payload)
+  console.log("[content] sending matchClicked to extension", match)
   chrome.runtime.sendMessage({ action: "matchClicked", match }, (response) => {
     const err = chrome.runtime.lastError
     if (err) {

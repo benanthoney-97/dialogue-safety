@@ -38,11 +38,10 @@ const vimeoEmbedUrl = (originalUrl = '', timestamp = 0) => {
 const fetchMatches = async (providerId, limit = 50) => {
     const { data, error } = await supabase
       .from('page_matches')
-    .select('id, phrase, video_url, confidence, document_id, status')
-    .eq('provider_id', providerId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+      .select('id, phrase, video_url, confidence, document_id, status')
+      .eq('provider_id', providerId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
   if (error) {
     throw error;
@@ -53,6 +52,7 @@ const fetchMatches = async (providerId, limit = 50) => {
     const embedUrl = vimeoEmbedUrl(row.video_url, 0);
 
     const match = {
+      page_match_id: row.id,
       phrase: row.phrase || '',
       video_url: embedUrl,
       confidence: row.confidence,

@@ -112,89 +112,11 @@ To apply, you’ll need various documents and information like a pitch deck that
 To get started, simply start your Advance Assurance application on SeedLegals. Fill in the questionnaire with help from our hint text and appoint us as your agent for SEIS purposes. We’ll conduct a thorough review based on our extensive experience and robust internal checklists and get back to you within three working days. After we’ve helped you make any recommended changes, we’ll also apply on your behalf via HMRC’s website.
 
   </p>
+  <script src="/admin-script/admin-script.js"></script>
   <script>
-    const log = () => {};
-    const style = document.createElement("style");
-    style.innerHTML = `
-      .sl-smart-link {
-        border-bottom: 2px solid #00bfa5;
-        background-color: rgba(0, 191, 165, 0.15);
-        cursor: pointer;
-        color: #000;
-        transition: all 0.2s ease;
-      }
-      .sl-smart-link:hover {
-        background-color: #00bfa5;
-        color: white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      }
-      .sl-smart-link::after {
-        content: " ▶";
-        font-size: 0.8em;
-        color: #00bfa5;
-      }
-    `;
-    document.head.appendChild(style);
-
-    const normalize = (str) => str.replace(/\s+/g, " ").trim();
-    const contentWalker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-
-    const highlight = (matches) => {
-      matches.forEach((match, matchIndex) => {
-        if (!match.phrase) return;
-        const target = normalize(match.phrase);
-        const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-        let n;
-        while ((n = walker.nextNode())) {
-          const parent = n.parentElement;
-          if (!parent || parent.tagName.match(/SCRIPT|STYLE|A|BUTTON|NOSCRIPT/)) continue;
-          const current = normalize(n.nodeValue);
-          if (!current.includes(target)) continue;
-
-          const fragment = document.createDocumentFragment();
-          const regex = new RegExp(`(${escapeRegex(target)})`, "gi");
-          const parts = current.split(regex);
-          parts.forEach((part) => {
-            if (!part) return;
-            if (part.toLowerCase() === target.toLowerCase()) {
-              const span = document.createElement("span");
-              span.className = "sl-smart-link";
-              span.dataset.matchIndex = matchIndex;
-              span.textContent = part;
-              span.addEventListener("click", () => console.log("match clicked", matchIndex));
-              fragment.appendChild(span);
-            } else {
-              fragment.appendChild(document.createTextNode(part));
-            }
-          });
-          parent.replaceChild(fragment, n);
-        }
-      });
-      log("matches highlighted for extension");
-    };
-
-    const fetchMatches = async () => {
-      try {
-        const res = await fetch("http://localhost:4173/api/match-map?provider_id=12");
-        if (!res.ok) throw new Error("match-map fetch failed");
-        const data = await res.json();
-        const active = Array.isArray(data) ? data.filter((entry) => entry.status === "active") : [];
-        highlight(active);
-        window.__SL_MATCH_MAP__ = active;
-        let script = document.getElementById("sl-match-map-data");
-        if (!script) {
-          script = document.createElement("script");
-          script.id = "sl-match-map-data";
-          document.body.appendChild(script);
-        }
-        script.textContent = JSON.stringify(active);
-      } catch (error) {
-        log("failed to load match map", error);
-      }
-    };
-
-    document.addEventListener("DOMContentLoaded", fetchMatches);
+    window.__SL_adminScript?.init({
+      providerId: 12
+    })
   </script>
 </body>
 </html>

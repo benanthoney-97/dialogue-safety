@@ -10,6 +10,7 @@ type MatchPayload = {
   content?: string
   knowledge_id?: number
   page_match_id?: number
+  phrase?: string
 }
 
 function SidePanel() {
@@ -43,6 +44,7 @@ function SidePanel() {
     videoUrl: match?.video_url,
     confidence: match?.confidence,
     content: match?.content,
+    phrase: match?.phrase,
     knowledgeId: match?.knowledge_id ?? null,
     pageMatchId: match?.page_match_id ?? null,
   }

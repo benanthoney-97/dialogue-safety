@@ -58,6 +58,7 @@ const sendMatchClick = (matchIndex: number) => {
     ...match,
     page_match_id: match.page_match_id ?? match.id ?? null
   }
+  console.log("[content] dispatching match click payload", payload)
   chrome.runtime.sendMessage({ action: "matchClicked", match }, (response) => {
     const err = chrome.runtime.lastError
     if (err) {
@@ -72,6 +73,12 @@ document.addEventListener("click", (event) => {
   const target = (event.target as HTMLElement).closest(".sl-smart-link")
   if (!target) return
   event.preventDefault()
+  console.log("[content] clicked smart-link", {
+    text: target.textContent,
+    idx: target.getAttribute("data-match-index"),
+    pageMatchId: target.getAttribute("data-page-match-id"),
+    classList: Array.from(target.classList)
+  })
   const index = Number(target.getAttribute("data-match-index"))
   if (!Number.isNaN(index)) {
     console.log("[content] matched index", index)
@@ -80,6 +87,13 @@ document.addEventListener("click", (event) => {
 })
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "removeMatchHighlight") {
+    const id = request.page_match_id ?? request.match?.page_match_id ?? request.match?.id
+    console.log("[content] removeMatchHighlight received", id)
+    invokePageScriptRemoval(id)
+    return false
+  }
+
   if (request.action === "read_page") {
     const content = document.body.innerText || ""
     
@@ -97,3 +111,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 3. If it's a message we don't recognize, return false to close the channel immediately.
   return false 
 })
+
+const invokePageScriptRemoval = (matchId: number | string | undefined | null) => {
+  if (!matchId) return
+  const removeFn = (window as any).__SL_removeMatchHighlight
+  if (typeof removeFn === "function") {
+    removeFn(matchId)
+  }
+}

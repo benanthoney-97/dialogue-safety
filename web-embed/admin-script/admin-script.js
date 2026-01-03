@@ -11,6 +11,15 @@
     initialized: false
   };
 
+  const getMatchIdentifier = (match) =>
+    match?.page_match_id ??
+    match?.id ??
+    match?.pageMatchId ??
+    match?.pageMatchID ??
+    match?.pageMatchid ??
+    match?.pageMatch ??
+    null;
+
   const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -44,6 +53,16 @@
         font-size: 0.8em;
         color: #00bfa5;
       }
+      .sl-smart-link.sl-smart-link--inactive {
+        border-color: rgba(148, 163, 184, 0.8);
+        background-color: rgba(239, 241, 245, 0.85);
+        color: rgba(55, 65, 81, 0.9);
+        box-shadow: none;
+        cursor: pointer;
+      }
+      .sl-smart-link.sl-smart-link--inactive::after {
+        color: rgba(148, 163, 184, 0.9);
+      }
     `;
     document.head.appendChild(style);
   };
@@ -75,6 +94,7 @@
     const disallowedTags = /SCRIPT|STYLE|A|BUTTON|NOSCRIPT|TEXTAREA|INPUT/;
 
     matches.forEach((match, matchIndex) => {
+      console.log("[sl-admin-script] processing match", matchIndex, match?.phrase, match?.status);
       if (!match || !match.phrase) return;
       const target = normalize(match.phrase);
       if (!target) return;
@@ -96,13 +116,23 @@
 
         parts.forEach((part) => {
           if (!part) return;
-          if (part.toLowerCase() === target.toLowerCase()) {
-            const span = document.createElement("span");
-            span.className = "sl-smart-link";
-            span.dataset.matchIndex = matchIndex;
-            span.textContent = part;
-            fragment.appendChild(span);
-          } else {
+            if (part.toLowerCase() === target.toLowerCase()) {
+              const span = document.createElement("span");
+              span.className = "sl-smart-link";
+              span.dataset.matchIndex = matchIndex;
+              const matchId = getMatchIdentifier(match);
+              if (matchId) {
+                span.dataset.pageMatchId = String(matchId);
+              }
+              if (match.status === "inactive") {
+                console.log("[sl-admin-script] marking inactive span", matchId);
+              }
+      if (match.status === "inactive") {
+        span.classList.add("sl-smart-link--inactive");
+      }
+              span.textContent = part;
+              fragment.appendChild(span);
+            } else {
             fragment.appendChild(document.createTextNode(part));
           }
         });
@@ -147,12 +177,75 @@
   };
 
   const applyMatches = (matches) => {
-    state.matches = Array.isArray(matches) ? matches.filter((entry) => entry.status === "active") : [];
+    state.matches = Array.isArray(matches) ? matches.slice() : [];
     persistMatches(state.matches);
     whenDOMReady(() => {
       ensureHighlightStyle();
       highlightMatches(state.matches);
       setupObserver();
+    });
+  };
+
+  const markSpansInactive = (pageMatchId) => {
+    const spans = Array.from(document.querySelectorAll(`.sl-smart-link[data-page-match-id="${pageMatchId}"]`));
+    if (!spans.length) {
+      console.log("[sl-admin-script] no spans found for", pageMatchId);
+      return;
+    }
+    spans.forEach((span) => {
+      span.classList.add("sl-smart-link--inactive");
+      span.style.opacity = "1";
+    });
+  };
+
+  const removeMatchHighlight = (pageMatchId) => {
+    console.log("[sl-admin-script] removeMatchHighlight called", pageMatchId);
+    const normalized = getMatchIdentifier({ page_match_id: pageMatchId });
+    if (!normalized) return;
+    const targetId = String(normalized);
+    markSpansInactive(targetId);
+    state.matches = state.matches.filter((match) => {
+      const identifier = getMatchIdentifier(match);
+      return !(identifier && String(identifier) === targetId);
+    });
+    window.__SL_MATCH_MAP__ = state.matches;
+    persistMatches(state.matches);
+  };
+
+  const clearInactiveSpans = (pageMatchId) => {
+    const spans = document.querySelectorAll(`.sl-smart-link[data-page-match-id="${pageMatchId}"].sl-smart-link--inactive`);
+    spans.forEach((span) => {
+      span.classList.remove("sl-smart-link--inactive");
+      span.style.pointerEvents = "";
+    });
+  };
+
+  const addMatchHighlight = (match) => {
+    console.log("[sl-admin-script] addMatchHighlight called", match?.page_match_id, match)
+    if (!match) return;
+    const matchId = getMatchIdentifier(match);
+    if (!matchId) return;
+    const targetId = String(matchId);
+    if (!match.phrase) {
+      console.warn("[sl-admin-script] addMatchHighlight missing phrase for", targetId);
+      return;
+    }
+
+    clearInactiveSpans(targetId);
+
+    state.matches = state.matches.filter((entry) => {
+      const identifier = getMatchIdentifier(entry);
+      return !(identifier && String(identifier) === targetId);
+    });
+
+    const normalizedMatch = { ...match, status: "active" };
+    state.matches.push(normalizedMatch);
+    window.__SL_MATCH_MAP__ = state.matches;
+    persistMatches(state.matches);
+
+    whenDOMReady(() => {
+      ensureHighlightStyle();
+      highlightMatches([normalizedMatch]);
     });
   };
 
@@ -179,4 +272,6 @@
   window.__SL_adminScript = {
     init
   };
+  window.__SL_removeMatchHighlight = removeMatchHighlight;
+  window.__SL_addMatchHighlight = addMatchHighlight;
 })();

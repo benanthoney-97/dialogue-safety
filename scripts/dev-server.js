@@ -6,6 +6,9 @@ const serveHandler = require('serve-handler');
 const decisionDataHandler = require('../web-embed/api/decision-data');
 const matchMapHandler = require('../web-embed/api/match-map');
 const pageMatchStatusHandler = require('../web-embed/api/page-match-status');
+const pageMatchHandler = require('../admin-extension/chrome-extension/api/page-match');
+const providerDocumentHandler = require('../admin-extension/chrome-extension/api/provider-document');
+const providerKnowledgeHandler = require('../admin-extension/chrome-extension/api/provider-knowledge');
 
 const WEB_ROOT = path.join(__dirname, '..', 'web-embed');
 const HTTP_PORT = 4173;
@@ -73,6 +76,21 @@ function startHttpServer() {
 
     if (parsedUrl.pathname === '/api/page-match-status') {
       await pageMatchStatusHandler(req, res);
+      return;
+    }
+
+    if (parsedUrl.pathname === '/api/page-match') {
+      await pageMatchHandler(req, res);
+      return;
+    }
+
+    if (parsedUrl.pathname === '/api/provider-document') {
+      await providerDocumentHandler(req, res);
+      return;
+    }
+
+    if (parsedUrl.pathname === '/api/provider-knowledge') {
+      await providerKnowledgeHandler(req, res);
       return;
     }
 

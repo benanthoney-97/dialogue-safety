@@ -112,6 +112,20 @@ template.innerHTML = `
       display: none;
     }
 
+    .decision-card-content {
+      font-size: 13px;
+      color: #475467;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 10px 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 6px;
+      display: none;
+    }
+
+
     .transcript-expand {
       background: transparent;
       border: none;
@@ -211,6 +225,7 @@ template.innerHTML = `
   </div>
   <div class="decision-card-meta" aria-live="polite"></div>
   <div class="decision-card-confidence" aria-live="polite"></div>
+  <div class="decision-card-content" aria-live="polite"></div>
   <div class="decision-card-phrase" aria-live="polite"></div>
   <button class="transcript-expand" aria-label="Show more transcript">
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -218,17 +233,17 @@ template.innerHTML = `
     </svg>
   </button>
     <div class="actions">
-      <button type="button" class="action approve" data-action="approve" aria-label="Approve">
+      <button type="button" class="action approve" data-action="approve" aria-label="Show">
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/>
         </svg>
-        <span class="action-label">Approve</span>
+        <span class="action-label">Show</span>
       </button>
-      <button type="button" class="action remove" data-action="remove" aria-label="Remove">
+      <button type="button" class="action remove" data-action="remove" aria-label="Hide">
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
         </svg>
-        <span class="action-label">Remove</span>
+        <span class="action-label">Hide</span>
       </button>
       <button type="button" class="action change" data-action="change" aria-label="Change">
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -248,6 +263,7 @@ class DecisionCard extends HTMLElement {
       "data-phrase",
       "data-video",
       "data-knowledge-id",
+      "data-content",
       "data-page-match-id"
     ];
   }
@@ -262,10 +278,12 @@ class DecisionCard extends HTMLElement {
     this.videoEl = null;
     this.iframeContainer = null;
     this.expandButton = null;
+    this.contentEl = null;
     this.transcriptExpanded = false;
     this.toggleTranscript = this.toggleTranscript.bind(this);
     this.knowledgeId = null;
     this.toggleKnowledgeId = null;
+    this.pageMatchId = null;
     this.downArrowSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>`;
     this.upArrowSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="m7.247 4.86-4.796 5.481c-.566.647-.106 1.659.753 1.659h9.592a1 1 0 0 0 .753-1.659l-4.796-5.48a1 1 0 0 0-1.506 0z"/></svg>`;
   }
@@ -274,6 +292,7 @@ class DecisionCard extends HTMLElement {
     this.shadowRoot.addEventListener("click", this.handleClick);
     this.metaEl = this.shadowRoot.querySelector(".decision-card-meta");
     this.confidenceEl = this.shadowRoot.querySelector(".decision-card-confidence");
+    this.contentEl = this.shadowRoot.querySelector(".decision-card-content");
     this.phraseEl = this.shadowRoot.querySelector(".decision-card-phrase");
     this.videoEl = this.shadowRoot.querySelector(".decision-card-video");
     this.iframeContainer = this.shadowRoot.querySelector(".sl-iframe-container");
@@ -299,6 +318,7 @@ class DecisionCard extends HTMLElement {
     if (name === "data-phrase") this.updatePhrase(newValue);
     if (name === "data-video") this.updateVideo(newValue);
     if (name === "data-knowledge-id") this.updateKnowledgeId(newValue);
+    if (name === "data-content") this.updateContent(newValue);
     if (name === "data-page-match-id") this.updatePageMatchId(newValue);
   }
 
@@ -336,6 +356,13 @@ class DecisionCard extends HTMLElement {
   updatePhrase(value) {
     if (!this.phraseEl) return;
     this.phraseEl.textContent = value || "";
+  }
+
+  updateContent(value) {
+    if (!this.contentEl) return;
+    const text = value || "";
+    this.contentEl.textContent = text;
+    this.contentEl.style.display = text ? "block" : "none";
   }
 
   updateVideo(value) {
@@ -380,10 +407,14 @@ class DecisionCard extends HTMLElement {
       })
     );
     if (action === "remove") {
+      if (this.pageMatchId) {
+        chrome.runtime.sendMessage({ action: "removeMatchHighlight", page_match_id: this.pageMatchId })
+      }
       this.markMatchStatus("inactive");
     }
     if (action === "approve") {
       this.markMatchStatus("active");
+      this.restoreMatchHighlight();
     }
   }
 
@@ -412,6 +443,30 @@ class DecisionCard extends HTMLElement {
     } catch (err) {
       console.error("[decision-card] mark status error", err);
     }
+  }
+
+  getMatchPayload() {
+    if (!this.pageMatchId) return null;
+    const payload = {
+      page_match_id: this.pageMatchId,
+      phrase: this.getAttribute("data-phrase") || "",
+      title: this.getAttribute("data-title") || "",
+      content: this.getAttribute("data-content") || "",
+      video_url: this.getAttribute("data-video") || "",
+      confidence: this.getAttribute("data-confidence") || "",
+      knowledge_id: this.getAttribute("data-knowledge-id") || null
+    };
+    return payload;
+  }
+
+  restoreMatchHighlight() {
+    const payload = this.getMatchPayload();
+    if (!payload) {
+      console.warn("[decision-card] cannot restore highlight without payload");
+      return;
+    }
+    console.log("[decision-card] restoring highlight", payload.page_match_id, payload);
+    chrome.runtime.sendMessage({ action: "restoreMatchHighlight", match: payload });
   }
 }
 

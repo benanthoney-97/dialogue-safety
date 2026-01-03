@@ -1,20 +1,5 @@
-const path = require('path');
-const dotenv = require('dotenv');
-const { createClient } = require('@supabase/supabase-js');
+const supabase = require('./supabase-client');
 const { getProviderDocument } = require('./provider-documents');
-
-dotenv.config({
-  path: path.resolve(__dirname, '..', '..', '.env')
-});
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.PLASMO_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment');
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const parseMetadata = (metadata) => {
   if (!metadata) return {};
@@ -51,13 +36,14 @@ async function lookupKnowledge(knowledgeId) {
 
 async function getPageMatchById(pageMatchId) {
   if (!pageMatchId) return null;
-  const { data, error } = await supabase
+const { data, error } = await supabase
     .from('page_matches')
     .select('*')
     .eq('id', pageMatchId)
     .maybeSingle();
 
   if (error) throw error;
+  console.log("[decision-data] fetched page_match", data);
   return data;
 }
 
@@ -73,7 +59,6 @@ async function handler(req, res) {
     const providerId = Number(requestUrl.searchParams.get('provider_id') || '');
     const documentId = Number(requestUrl.searchParams.get('document_id') || '');
     const knowledgeId = Number(requestUrl.searchParams.get('knowledge_id') || '');
-    const phraseParam = requestUrl.searchParams.get('phrase') || '';
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -83,19 +68,24 @@ async function handler(req, res) {
       video_url: '',
       cover_image_url: '',
       is_active: null,
-      source_url: ''
+      source_url: '',
+      document_id: null
+    };
+
+    let documentRow = null;
+    const applyDocumentInfo = (doc) => {
+      if (!doc) return;
+      payload.title = payload.title || doc.title || '';
+      payload.cover_image_url = payload.cover_image_url || doc.cover_image_url || '';
+      payload.is_active = payload.is_active ?? doc.is_active ?? null;
+      payload.source_url = payload.source_url || doc.source_url || '';
+      payload.document_id = doc.id ?? payload.document_id;
     };
 
     if (documentId && providerId) {
-      const doc = await getProviderDocument(documentId, providerId);
-      console.log("[decision-data] provider_documents row", doc);
-
-      if (doc) {
-        payload.title = doc.title || '';
-        payload.cover_image_url = doc.cover_image_url || '';
-        payload.is_active = doc.is_active ?? null;
-        payload.source_url = doc.source_url || '';
-      }
+      documentRow = await getProviderDocument(documentId, providerId);
+      console.log("[decision-data] provider_documents row", documentRow);
+      applyDocumentInfo(documentRow);
     }
 
     let knowledgeMeta = null;
@@ -113,20 +103,8 @@ async function handler(req, res) {
 
     const pageMatchId = Number(requestUrl.searchParams.get('page_match_id') || '');
     let pageMatch = await getPageMatchById(pageMatchId);
-    if (!pageMatch && documentId && providerId && phraseParam) {
-      const normalized = phraseParam.replace(/\s+/g, ' ').trim();
-      const { data, error } = await supabase
-        .from('page_matches')
-        .select('*')
-        .eq('document_id', documentId)
-        .eq('provider_id', providerId)
-        .ilike('phrase', `%${normalized}%`)
-        .order('confidence', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      pageMatch = data;
+    if (!pageMatch) {
+      console.warn("[decision-data] no page_match found for", pageMatchId);
     }
 
     payload.confidence = pageMatch?.confidence ?? null;
@@ -134,6 +112,17 @@ async function handler(req, res) {
     payload.page_match_id = pageMatch?.id ?? null;
     payload.video_url = pageMatch?.video_url || payload.video_url;
     payload.content = pageMatch?.transcript || payload.content;
+
+    const matchDocumentId = pageMatch?.document_id ?? documentId;
+    if (matchDocumentId && providerId) {
+      if (!documentRow || documentRow.id !== matchDocumentId) {
+        documentRow = await getProviderDocument(matchDocumentId, providerId);
+        console.log("[decision-data] provider_documents row (page match)", documentRow);
+      }
+      applyDocumentInfo(documentRow);
+    } else if (matchDocumentId) {
+      payload.document_id = payload.document_id ?? matchDocumentId;
+    }
 
     if (!payload.video_url && knowledgeMeta?.metadata) {
       payload.video_url =
@@ -154,5 +143,4 @@ async function handler(req, res) {
     res.end(JSON.stringify({ error: err.message }));
   }
 }
-
 module.exports = handler;
